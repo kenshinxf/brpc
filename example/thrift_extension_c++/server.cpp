@@ -34,8 +34,18 @@ public:
                                     google::protobuf::Closure* done) override {
         // Dispatch calls to different methods
         if (cntl->thrift_method_name() == "Echo") {
-            return Echo(cntl, req->Cast<example::EchoRequest>(),
-                        res->Cast<example::EchoResponse>(), done);
+
+            // Request and Response
+            example::EchoRequest t_req;
+            int32_t num;
+            std::string name;
+
+            example::EchoResponse* t_res;;
+
+            req->Cast(&t_req, &num, &name);
+            res->Cast(&t_res);
+
+            return Echo(cntl, &t_req,&num, t_res, done);
         } else {
             cntl->SetFailed(brpc::ENOMETHOD, "Fail to find method=%s",
                             cntl->thrift_method_name().c_str());
@@ -45,13 +55,14 @@ public:
 
     void Echo(brpc::Controller* cntl,
               const example::EchoRequest* req,
+              const int32_t* num,
               example::EchoResponse* res,
               google::protobuf::Closure* done) {
         // This object helps you to call done->Run() in RAII style. If you need
         // to process the request asynchronously, pass done_guard.release().
         brpc::ClosureGuard done_guard(done);
 
-        res->data = req->data + " (Echo)";
+        res->data = req->data + " (Echo) " + std::to_string(*num);
     }
 };
 

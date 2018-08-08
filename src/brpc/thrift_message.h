@@ -32,6 +32,10 @@
 #include "brpc/channel_base.h"
 #include "brpc/controller.h"
 
+#include <thrift/Thrift.h>
+#include <thrift/transport/TBufferTransports.h>
+#include <thrift/protocol/TBinaryProtocol.h>
+
 namespace apache {
 namespace thrift {
 class TBase;
@@ -40,6 +44,17 @@ class TProtocol;
 }
 }
 }
+
+// _THRIFT_STDCXX_H_ is defined by thrift/stdcxx.h which was added since thrift 0.11.0
+#include <thrift/TProcessor.h> // to include stdcxx.h if present
+#ifndef THRIFT_STDCXX
+ #if defined(_THRIFT_STDCXX_H_)
+ # define THRIFT_STDCXX apache::thrift::stdcxx
+ #else
+ # define THRIFT_STDCXX boost
+ # include <boost/make_shared.hpp>
+ #endif
+#endif
 
 namespace brpc {
 
@@ -78,8 +93,9 @@ private:
 public:
     ThriftMessageBase* raw_instance() const { return _raw_instance; }
 
-    template <typename T> T* Cast();
-    
+    template<typename T, typename ... Ts> bool Cast(T* arg, Ts* ... args);
+    template<typename T> bool Cast(T** arg);
+
     ThriftFramedMessage();
 
     virtual ~ThriftFramedMessage();
@@ -146,13 +162,6 @@ private:
     ChannelBase* _channel;
 };
 
-namespace policy {
-// Implemented in policy/thrift_protocol.cpp
-bool ReadThriftStruct(const butil::IOBuf& body,
-                      ThriftMessageBase* raw_msg,
-                      int16_t expected_fid);
-}
-
 namespace details {
 
 template <typename T>
@@ -200,26 +209,125 @@ public:
 
 } // namespace details
 
-template <typename T>
-T* ThriftFramedMessage::Cast() {
-    if (_raw_instance) {
-        auto p = dynamic_cast<details::ThriftMessageHolder<T>*>(_raw_instance);
-        if (p) {
-            return &p->msg;
+class ThriftMessageReader {
+private:
+    apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TMemoryBuffer>* _iprot;
+    std::string fname;
+    uint32_t xfer;
+    ::apache::thrift::protocol::TType ftype;
+    int16_t fid;
+public:
+    explicit ThriftMessageReader(
+        apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TMemoryBuffer>* iport) : _iprot(iport) {
+            xfer = 0;
+            ftype = ::apache::thrift::protocol::T_STOP;
+            fid = -1;
         }
-        delete _raw_instance;
-    }
-    auto raw_msg_wrapper = new details::ThriftMessageHolder<T>;
-    T* raw_msg = &raw_msg_wrapper->msg;
-    _raw_instance = raw_msg_wrapper;
-    _own_raw_instance = true;
 
-    if (!body.empty()) {
-        if (!policy::ReadThriftStruct(body, _raw_instance, field_id)) {
+    // Thrift message recursive abort function
+    template <typename T>
+    bool ReadThriftMessage(T* raw_msg) {
+        bool success = false;
+
+        xfer += _iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STRUCT) {
+            raw_msg->read(_iprot);
+            success = true;
+        } else {
+            xfer += _iprot->skip(ftype);
+        }
+        xfer += _iprot->readFieldEnd();
+        return success;
+    }
+
+    bool ReadThriftMessage(std::string* raw_msg) {
+        bool success = false;
+
+        xfer += _iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_STRING) {
+            _iprot->readString(*raw_msg);
+            success = true;
+        } else {
+            xfer += _iprot->skip(ftype);
+        }
+        xfer += _iprot->readFieldEnd();
+        return success;
+    }
+
+    bool ReadThriftMessage(int8_t* raw_msg) {
+        bool success = false;
+
+        xfer += _iprot->readFieldBegin(fname, ftype, fid);
+        if (ftype == ::apache::thrift::protocol::T_I32) {
+            _iprot->readI32(*raw_msg);
+            success = true;
+        } else {
+            xfer += _iprot->skip(ftype);
+        }
+        xfer += _iprot->readFieldEnd();
+        return success;
+    }
+
+    template<typename T, typename ... Ts>
+    bool ReadThriftMessage(T* arg, Ts* ... args) {
+        if (!ReadThriftMessage(arg)) {
             LOG(ERROR) << "Fail to parse " << butil::class_name<T>();
         }
+        return ReadThriftMessage(args ...);
     }
-    return raw_msg;
+
+};
+
+template<typename ... Ts>
+bool ParseThriftStruct(const butil::IOBuf& body, Ts* ... args) {
+    const size_t body_len  = body.size();
+    uint8_t* thrift_buffer = (uint8_t*)malloc(body_len);
+    body.copy_to(thrift_buffer, body_len);
+    auto in_buffer =
+        THRIFT_STDCXX::make_shared<apache::thrift::transport::TMemoryBuffer>(
+            thrift_buffer, body_len,
+            ::apache::thrift::transport::TMemoryBuffer::TAKE_OWNERSHIP);
+    apache::thrift::protocol::TBinaryProtocolT<apache::thrift::transport::TMemoryBuffer> iprot(in_buffer);
+
+    bool success = false;
+    uint32_t xfer = 0;
+    std::string fname;
+
+    xfer += iprot.readStructBegin(fname);
+    ThriftMessageReader reader(&iprot);
+
+    success = reader.ReadThriftMessage(args ...);
+
+    xfer += iprot.readStructEnd();
+    iprot.getTransport()->readEnd();
+    return success;
+}
+
+// Cast method for request
+template<typename T, typename ... Ts>
+bool ThriftFramedMessage::Cast(T* arg, Ts* ... args) {
+    bool success = false;
+
+    if (!body.empty()) {
+        success = ParseThriftStruct(body, arg, args ...);
+    }
+    return success;
+}
+
+// Cast method for response, own the raw instance inside ThriftFramedMessage, and the instance will be released later
+// User desn't need to take care of the response
+template<typename T>
+bool ThriftFramedMessage::Cast(T** arg) {
+    bool success = false;
+
+    if (body.empty()) { // handle response scenairo
+        auto raw_msg_wrapper = new details::ThriftMessageHolder<T>;
+        *arg = &raw_msg_wrapper->msg;
+        _raw_instance = raw_msg_wrapper;
+        _own_raw_instance = true;
+        success = true;
+    }
+    return success;
 }
 
 template <typename REQUEST, typename RESPONSE>

@@ -45,9 +45,11 @@ class EchoServiceHandler : virtual public example::EchoServiceIf {
 public:
     EchoServiceHandler() {}
 
-    void Echo(example::EchoResponse& res, const example::EchoRequest& req) {
+    //void Echo(example::EchoResponse& res, const example::EchoRequest& req) {
+    void Echo(example::EchoResponse& res, const example::EchoRequest& req, const int32_t num, const std::string& name) {
         // Process request, just attach a simple string.
-        res.data = req.data + " world";
+        res.data = req.data + " world " + std::to_string(num) + " " + name;
+        //res.data = req.data + " world ";
         return;
     }
 

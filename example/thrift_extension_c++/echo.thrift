@@ -15,6 +15,7 @@ struct EchoResponse {
 }
 
 service EchoService {
-    EchoResponse Echo(1:EchoRequest request);
+    //EchoResponse Echo(1:EchoRequest request);
+    EchoResponse Echo(1:EchoRequest request, 2: required i32 num, 3: string name);
 }
 

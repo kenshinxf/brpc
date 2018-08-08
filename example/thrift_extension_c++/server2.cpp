@@ -55,8 +55,12 @@ public:
             stub.CallMethod("RealEcho", &cntl, req, res, NULL);
             done->Run();
         } else if (cntl->thrift_method_name() == "RealEcho") {
-            return RealEcho(cntl, req->Cast<example::EchoRequest>(),
-                        res->Cast<example::EchoResponse>(), done);
+            example::EchoRequest t_req;
+            example::EchoResponse* t_res;
+            req->Cast(&t_req);
+            res->Cast(&t_res);
+
+            return RealEcho(cntl, &t_req, t_res, done);
         } else {    
             cntl->SetFailed(brpc::ENOMETHOD, "Fail to find method=%s",
                     cntl->thrift_method_name().c_str());

@@ -59,7 +59,8 @@ int main(int argc, char **argv) {
 
     while (1) {
         try {
-            client.Echo(res, req);
+            client.Echo(res, req, 32, "kenwang");
+            //client.Echo(res, req);
             LOG(INFO) << "Req=" << req << " Res=" << res;
         } catch (std::exception& e) {
             LOG(ERROR) << "Fail to rpc, " << e.what();
