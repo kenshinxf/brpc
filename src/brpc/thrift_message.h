@@ -254,7 +254,7 @@ public:
         return success;
     }
 
-    bool ReadThriftMessage(int8_t* raw_msg) {
+    bool ReadThriftMessage(int32_t* raw_msg) {
         bool success = false;
 
         xfer += _iprot->readFieldBegin(fname, ftype, fid);
