@@ -125,6 +125,12 @@ public:
                     ThriftFramedMessage* res,
                     ::google::protobuf::Closure* done);
 
+    template <typename REQUEST>
+    void CallMethod(const char* method_name,
+                    Controller* cntl,
+                    const REQUEST* raw_request,
+                    ::google::protobuf::Closure* done);
+
 private:
     ChannelBase* _channel;
 };
@@ -233,6 +239,21 @@ void ThriftStub::CallMethod(const char* method_name,
         new_done->response._raw_instance = &new_done->raw_response_wrapper;
         _channel->CallMethod(NULL, cntl, &request, &new_done->response, new_done);
     }
+}
+
+template <typename REQUEST>
+void ThriftStub::CallMethod(const char* method_name,
+                            Controller* cntl,
+                            const REQUEST* raw_request,
+                            ::google::protobuf::Closure* done) {
+    cntl->_thrift_method_name.assign(method_name);
+
+    details::ThriftMessageWrapper<REQUEST>
+        raw_request_wrapper(const_cast<REQUEST*>(raw_request));
+    ThriftFramedMessage request;
+    request._raw_instance = &raw_request_wrapper;
+
+    _channel->CallMethod(NULL, cntl, &request, NULL, done);
 }
 
 } // namespace brpc

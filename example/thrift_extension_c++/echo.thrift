@@ -16,5 +16,6 @@ struct EchoResponse {
 
 service EchoService {
     EchoResponse Echo(1:EchoRequest request);
+    oneway void Ping(1:EchoRequest request);
 }
 

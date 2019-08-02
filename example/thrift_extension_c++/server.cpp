@@ -39,6 +39,8 @@ public:
         if (cntl->thrift_method_name() == "Echo") {
             return Echo(cntl, req->Cast<example::EchoRequest>(),
                         res->Cast<example::EchoResponse>(), done);
+        } if (cntl->thrift_method_name() == "Ping") {
+            return Ping(cntl, req->Cast<example::EchoRequest>(), NULL, done);
         } else {
             cntl->SetFailed(brpc::ENOMETHOD, "Fail to find method=%s",
                             cntl->thrift_method_name().c_str());
@@ -56,6 +58,21 @@ public:
 
         res->data = req->data + " (Echo)";
     }
+
+    void Ping(brpc::Controller* cntl,
+              const example::EchoRequest* req,
+              example::EchoResponse* res,
+              google::protobuf::Closure* done) {
+        // This object helps you to call done->Run() in RAII style. If you need
+        // to process the request asynchronously, pass done_guard.release().
+
+        brpc::ClosureGuard done_guard(done);
+
+        // There's no response need to be processed, just return;
+        LOG(INFO) << "Get Thrift oneway request: [" << req->data << "]";
+        return;
+    }
+
 };
 
 int main(int argc, char* argv[]) {

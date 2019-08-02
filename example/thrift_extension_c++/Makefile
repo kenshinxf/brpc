@@ -19,6 +19,7 @@ SOPATHS=$(addprefix -Wl$(COMMA)-rpath=, $(LIBS))
 STATIC_LINKINGS += -lthrift -lgflags -lbrpc -levent
 
 CLIENT_SOURCES = client.cpp
+CLIENT_ONEWAY_SOURCES = client_oneway.cpp
 CLIENT2_SOURCES = client2.cpp
 SERVER_SOURCES = server.cpp
 SERVER2_SOURCES = server2.cpp
@@ -27,17 +28,18 @@ PROTOS = $(wildcard *.proto)
 PROTO_OBJS = $(PROTOS:.proto=.pb.o)
 PROTO_GENS = $(PROTOS:.proto=.pb.h) $(PROTOS:.proto=.pb.cc)
 CLIENT_OBJS = $(addsuffix .o, $(basename $(CLIENT_SOURCES)))
+CLIENT_ONEWAY_OBJS = $(addsuffix .o, $(basename $(CLIENT_ONEWAY_SOURCES)))
 CLIENT2_OBJS = $(addsuffix .o, $(basename $(CLIENT2_SOURCES)))
 SERVER_OBJS = $(addsuffix .o, $(basename $(SERVER_SOURCES)))
 SERVER2_OBJS = $(addsuffix .o, $(basename $(SERVER2_SOURCES)))
 
 .PHONY:all
-all: echo_client echo_client2 echo_server echo_server2 native_server native_client
+all: echo_client echo_client2 echo_server echo_server2 native_server native_client client_oneway native_client_oneway
 
 .PHONY:clean
 clean:
 	@echo "Cleaning"
-	@rm -rf echo_client echo_client2 echo_server echo_server2 $(PROTO_GENS) $(PROTO_OBJS) $(CLIENT_OBJS) $(CLIENT2_OBJS) $(SERVER_OBJS) $(SERVER2_OBJS) native_server native_client EchoService.o echo_types.o libechothrift.a gen-cpp gen-py
+	@rm -rf echo_client echo_client2 echo_server echo_server2 $(PROTO_GENS) $(PROTO_OBJS) $(CLIENT_OBJS) $(CLIENT2_OBJS) $(SERVER_OBJS) $(SERVER2_OBJS) native_server native_client client_oneway native_client_oneway EchoService.o echo_types.o libechothrift.a gen-cpp gen-py
 
 echo_client:$(PROTO_OBJS) $(CLIENT_OBJS) libechothrift.a
 	@echo "Linking $@"
@@ -54,6 +56,10 @@ echo_server:$(PROTO_OBJS) $(SERVER_OBJS) libechothrift.a
 echo_server2:$(PROTO_OBJS) $(SERVER2_OBJS) libechothrift.a
 	@echo "Linking $@"
 	@$(CXX) $(LIBPATHS) $(SOPATHS) -Xlinker "-(" $^ libechothrift.a -Xlinker "-)" $(STATIC_LINKINGS) $(DYNAMIC_LINKINGS) -o $@
+
+client_oneway:$(PROTO_OBJS) $(CLIENT_ONEWAY_OBJS) libechothrift.a
+	@echo "Linking $@"
+	@$(CXX) $(LIBPATHS) $(SOPATHS) -Xlinker "-(" $^ -Xlinker "-)" $(STATIC_LINKINGS) $(DYNAMIC_LINKINGS) -o $@
 
 %.o:%.cpp libechothrift.a
 	@echo "Compiling $@"
@@ -76,3 +82,6 @@ native_server: libechothrift.a
 
 native_client: libechothrift.a
 	@$(CXX) native_client.cpp gen-cpp/echo_types.cpp gen-cpp/EchoService.cpp $(HDRPATHS) $(LIBPATHS) $(SOPATHS) $(CXXFLAGS) -lthriftnb -lthrift -levent -lpthread -lgflags -lbrpc -o native_client
+
+native_client_oneway: libechothrift.a
+	@$(CXX) native_client_oneway.cpp gen-cpp/echo_types.cpp gen-cpp/EchoService.cpp $(HDRPATHS) $(LIBPATHS) $(SOPATHS) $(CXXFLAGS) -lthriftnb -lthrift -levent -lpthread -lgflags -lbrpc -o native_client_oneway

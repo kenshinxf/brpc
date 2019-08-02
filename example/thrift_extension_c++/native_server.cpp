@@ -54,6 +54,12 @@ public:
         return;
     }
 
+    void Ping(const example::EchoRequest& req) {
+        // Process request, just print a simple req string.
+        LOG(INFO) << "Get Thrift oneway request: [" << req.data << "]";
+        return;
+    }
+
 };
 
 int main(int argc, char *argv[]) {
